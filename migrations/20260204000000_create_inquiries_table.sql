@@ -1,0 +1,1 @@
+20260204000000_create_inquiries_table.sql

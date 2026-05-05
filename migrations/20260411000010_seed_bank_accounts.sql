@@ -1,0 +1,281 @@
+-- -- Cash & Bank Module - Seed Bank and Cash Accounts
+-- -- Migration: 20260411000010
+-- -- Purpose: Seed the database with multiple bank accounts and cash accounts with opening balances
+
+-- -- ============================================
+-- -- SEED BANK ACCOUNTS (5 banks)
+-- -- ============================================
+
+-- -- 1. HDFC Bank - Current Account
+-- INSERT INTO public.bank_accounts (
+--   account_name,
+--   account_type,
+--   bank_name,
+--   branch_name,
+--   account_number,
+--   ifsc_code,
+--   micr_code,
+--   opening_balance,
+--   opening_date,
+--   is_active,
+--   is_default,
+--   remarks,
+--   created_at,
+--   updated_at
+-- ) VALUES (
+--   'HDFC Bank - Current Account',
+--   'current',
+--   'HDFC Bank',
+--   'Mumbai Main Branch',
+--   '50200012345678',
+--   'HDFC0001234',
+--   '400240002',
+--   2500000.00,  -- ₹25,00,000 opening balance
+--   CURRENT_DATE - INTERVAL '1 year',
+--   true,
+--   true,  -- Default account
+--   'Primary business current account',
+--   NOW(),
+--   NOW()
+-- );
+
+-- -- 2. ICICI Bank - Savings Account
+-- INSERT INTO public.bank_accounts (
+--   account_name,
+--   account_type,
+--   bank_name,
+--   branch_name,
+--   account_number,
+--   ifsc_code,
+--   micr_code,
+--   opening_balance,
+--   opening_date,
+--   is_active,
+--   is_default,
+--   remarks,
+--   created_at,
+--   updated_at
+-- ) VALUES (
+--   'ICICI Bank - Savings Account',
+--   'savings',
+--   'ICICI Bank',
+--   'Andheri Branch',
+--   '000405001234',
+--   'ICIC0000004',
+--   '400229002',
+--   750000.00,  -- ₹7,50,000 opening balance
+--   CURRENT_DATE - INTERVAL '8 months',
+--   true,
+--   false,
+--   'Company savings account for reserves',
+--   NOW(),
+--   NOW()
+-- );
+
+-- -- 3. State Bank of India - Current Account
+-- INSERT INTO public.bank_accounts (
+--   account_name,
+--   account_type,
+--   bank_name,
+--   branch_name,
+--   account_number,
+--   ifsc_code,
+--   micr_code,
+--   opening_balance,
+--   opening_date,
+--   is_active,
+--   is_default,
+--   remarks,
+--   created_at,
+--   updated_at
+-- ) VALUES (
+--   'SBI - Current Account',
+--   'current',
+--   'State Bank of India',
+--   'Bandra Branch',
+--   '30123456789',
+--   'SBIN0001234',
+--   '400002002',
+--   1800000.00,  -- ₹18,00,000 opening balance
+--   CURRENT_DATE - INTERVAL '6 months',
+--   true,
+--   false,
+--   'SBI current account for vendor payments',
+--   NOW(),
+--   NOW()
+-- );
+
+-- -- 4. Axis Bank - Overdraft Account
+-- INSERT INTO public.bank_accounts (
+--   account_name,
+--   account_type,
+--   bank_name,
+--   branch_name,
+--   account_number,
+--   ifsc_code,
+--   micr_code,
+--   opening_balance,
+--   opening_date,
+--   is_active,
+--   is_default,
+--   remarks,
+--   created_at,
+--   updated_at
+-- ) VALUES (
+--   'Axis Bank - Overdraft',
+--   'overdraft',
+--   'Axis Bank',
+--   'Powai Branch',
+--   '918020012345678',
+--   'UTIB0001234',
+--   '400211002',
+--   500000.00,  -- ₹5,00,000 opening balance
+--   CURRENT_DATE - INTERVAL '4 months',
+--   true,
+--   false,
+--   'Overdraft facility for working capital',
+--   NOW(),
+--   NOW()
+-- );
+
+-- -- 5. Kotak Mahindra Bank - Current Account
+-- INSERT INTO public.bank_accounts (
+--   account_name,
+--   account_type,
+--   bank_name,
+--   branch_name,
+--   account_number,
+--   ifsc_code,
+--   micr_code,
+--   opening_balance,
+--   opening_date,
+--   is_active,
+--   is_default,
+--   remarks,
+--   created_at,
+--   updated_at
+-- ) VALUES (
+--   'Kotak Bank - Current Account',
+--   'current',
+--   'Kotak Mahindra Bank',
+--   'Malad Branch',
+--   '1234012345678',
+--   'KKBK0001234',
+--   '400485002',
+--   1200000.00,  -- ₹12,00,000 opening balance
+--   CURRENT_DATE - INTERVAL '3 months',
+--   true,
+--   false,
+--   'Kotak current account for client payments',
+--   NOW(),
+--   NOW()
+-- );
+
+-- -- ============================================
+-- -- SEED CASH ACCOUNTS (3 cash accounts)
+-- -- ============================================
+
+-- -- 1. Main Cash In Hand
+-- INSERT INTO public.bank_accounts (
+--   account_name,
+--   account_type,
+--   opening_balance,
+--   opening_date,
+--   is_active,
+--   is_default,
+--   remarks,
+--   created_at,
+--   updated_at
+-- ) VALUES (
+--   'Cash In Hand - Main',
+--   'cash',
+--   150000.00,  -- ₹1,50,000 opening balance
+--   CURRENT_DATE - INTERVAL '1 year',
+--   true,
+--   false,
+--   'Main office cash in hand',
+--   NOW(),
+--   NOW()
+-- );
+
+-- -- 2. Petty Cash
+-- INSERT INTO public.bank_accounts (
+--   account_name,
+--   account_type,
+--   opening_balance,
+--   opening_date,
+--   is_active,
+--   is_default,
+--   remarks,
+--   created_at,
+--   updated_at
+-- ) VALUES (
+--   'Petty Cash',
+--   'petty_cash',
+--   25000.00,  -- ₹25,000 opening balance
+--   CURRENT_DATE - INTERVAL '1 year',
+--   true,
+--   false,
+--   'Petty cash for daily expenses',
+--   NOW(),
+--   NOW()
+-- );
+
+-- -- 3. Branch Cash - Pune
+-- INSERT INTO public.bank_accounts (
+--   account_name,
+--   account_type,
+--   opening_balance,
+--   opening_date,
+--   is_active,
+--   is_default,
+--   remarks,
+--   created_at,
+--   updated_at
+-- ) VALUES (
+--   'Cash In Hand - Pune Branch',
+--   'cash',
+--   75000.00,  -- ₹75,000 opening balance
+--   CURRENT_DATE - INTERVAL '6 months',
+--   true,
+--   false,
+--   'Pune branch cash in hand',
+--   NOW(),
+--   NOW()
+-- );
+
+-- -- ============================================
+-- -- VERIFICATION QUERY
+-- -- ============================================
+
+-- -- Display all seeded accounts
+-- SELECT 
+--   account_name,
+--   account_type,
+--   bank_name,
+--   account_number,
+--   opening_balance,
+--   opening_date,
+--   is_active,
+--   is_default
+-- FROM public.bank_accounts
+-- WHERE deleted_at IS NULL
+-- ORDER BY 
+--   CASE account_type
+--     WHEN 'current' THEN 1
+--     WHEN 'savings' THEN 2
+--     WHEN 'overdraft' THEN 3
+--     WHEN 'cash' THEN 4
+--     WHEN 'petty_cash' THEN 5
+--   END,
+--   account_name;
+
+-- -- Summary
+-- SELECT 
+--   account_type,
+--   COUNT(*) as account_count,
+--   SUM(opening_balance) as total_opening_balance
+-- FROM public.bank_accounts
+-- WHERE deleted_at IS NULL
+-- GROUP BY account_type
+-- ORDER BY account_count DESC;
