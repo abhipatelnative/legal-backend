@@ -1,4 +1,4 @@
-# Migration Files List (2026-03-30 to 2026-04-22)
+<!--formate:  1. `20260330000000_add_leave_sandwich_rule.sql` -->
 
 _Auto-regenerated to include files from BOTH `Backend/migrations/` and `Frontend/supabase/migrations/`._
 _The runner (migrate_sequential.js) resolves each filename against both directories._
@@ -132,3 +132,22 @@ _One future-dated file (`20260706000000_add_settings_for_date.sql`) was EXCLUDED
 127. `20260424000000_app_module_buckets.sql`
 128. `20260424000000_add_registry_id_to_ptso.sql`
 129. `20260424000000_fix_expense_number_generation.sql`
+130. `20260505120000_client_added_welcome_email_template.sql`
+131. `20260505120500_client_added_welcome_auto_rule.sql`
+132. `20260505130000_professional_client_and_order_templates.sql`
+133. `20260505140000_inquiry_received_email_template.sql`
+134. `20260505140500_inquiry_received_auto_rule.sql`
+135. `20260505150000_inquiries_full_name_nullable.sql`
+136. `20260505160000_inquiries_contact_fields_nullable.sql`
+137. `20260505170000_inquiry_acknowledgement_email.sql`
+138. `20260505180000_inquiry_acknowledgement_auto_rule.sql`
+139. `20260505190000_external_recipient_email_templates.sql`
+140. `20260505200000_external_recipient_auto_rules.sql`
+141. `20260505270000_fix_service_order_number_collision.sql`
+142. `20260505280000_fix_service_order_number_collision_global.sql`
+143. `20260505290000_admin_recipient_email_templates.sql`
+1. `20260430000000_notification_auto_rules_crud_rpcs.sql`
+2. `20260430000001_restore_balance_aggregate_functions.sql`
+3. `20260430000002_sync_service_order_payments_paid.sql`
+4. `20260430000003_approve_expense_with_payment.sql`
+5. `20260430000004_fix_search_index_refresh.sql`

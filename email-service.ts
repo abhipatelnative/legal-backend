@@ -477,8 +477,9 @@ export function substituteTemplateVarsGeneric(
 
 /**
  * Resolve user IDs to email addresses.
- * Only uses employees.company_email — no personal email or auth fallback.
- * Users without a company_email are silently skipped.
+ * Tries (in order): employees.company_email → employees.personal_email →
+ * auth.users.email (via supabase.auth.admin.getUserById). Users with no
+ * email anywhere are skipped.
  */
 export async function getEmailsForUserIds(userIds: string[]): Promise<Map<string, string>> {
     const result = new Map<string, string>();
@@ -486,29 +487,49 @@ export async function getEmailsForUserIds(userIds: string[]): Promise<Map<string
 
     const uniqueUserIds = [...new Set(userIds.filter(Boolean))];
 
+    // 1) Prefer employees.company_email; fall back to employees.personal_email.
     const { data: employeeRows, error: employeeError } = await supabase
         .from('employees')
-        .select('user_id, company_email')
+        .select('user_id, company_email, personal_email')
         .in('user_id', uniqueUserIds)
         .eq('is_active', true)
-        .eq('is_deleted', false)
-        .not('company_email', 'is', null);
+        .eq('is_deleted', false);
 
     if (employeeError) {
-        console.error('[Email] Error fetching company emails:', employeeError);
-        return result;
+        console.error('[Email] Error fetching employee emails:', employeeError);
+    } else {
+        (employeeRows || []).forEach((row: any) => {
+            const company = (row.company_email || '').trim();
+            const personal = (row.personal_email || '').trim();
+            const email = company || personal;
+            if (email) result.set(row.user_id, email);
+        });
     }
 
-    (employeeRows || []).forEach((row: any) => {
-        const email = (row.company_email || '').trim();
-        if (email) result.set(row.user_id, email);
-    });
+    // 2) For any user_id still without an email (not in employees, or both
+    //    employee email columns blank), fall back to auth.users.email via the
+    //    Supabase admin API. Catches admins/managers who exist as auth users
+    //    but don't have an employees row.
+    const stillMissing = uniqueUserIds.filter((id) => !result.has(id));
+    if (stillMissing.length > 0) {
+        await Promise.all(stillMissing.map(async (id) => {
+            try {
+                const { data, error } = await (supabase as any).auth.admin.getUserById(id);
+                if (!error) {
+                    const email = ((data as any)?.user?.email || '').trim();
+                    if (email) result.set(id, email);
+                }
+            } catch {
+                // Ignore per-user errors; totals are logged below.
+            }
+        }));
+    }
 
     const noEmail = uniqueUserIds.filter((id) => !result.has(id));
     const emails = [...result.values()];
-    console.log(`[Email] Resolved ${result.size}/${uniqueUserIds.length} company emails` +
-        (result.size > 0 ? `: ${emails.slice(0, 3).join(", ")}${emails.length > 3 ? "..." : ""}` : "") +
-        (noEmail.length > 0 ? ` | ${noEmail.length} skipped (no company_email)` : ""));
+    console.log(`[Email] Resolved ${result.size}/${uniqueUserIds.length} emails` +
+        (result.size > 0 ? ` (sample: ${emails.slice(0, 3).join(", ")}${emails.length > 3 ? "..." : ""})` : "") +
+        (noEmail.length > 0 ? ` | ${noEmail.length} skipped (no company_email, personal_email, or auth email)` : ""));
 
     return result;
 }

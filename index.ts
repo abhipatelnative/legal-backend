@@ -1009,7 +1009,7 @@ app.patch("/api/notifications/mark-all-read", async (req, res) => {
 // Send notifications to users (single endpoint; dispatches by channel in parallel; one channel failing does not break others)
 app.post("/api/notifications/send-push", async (req, res) => {
     try {
-        const { userIds, notification, sendEmail, skipPush, emailTemplateId, channels: channelsBody } = req.body;
+        const { userIds, notification, sendEmail, skipPush, emailTemplateId, channels: channelsBody, variables } = req.body;
 
         // Normalize channels: support legacy sendEmail/skipPush or explicit channels object
         const channels = (() => {
@@ -1056,8 +1056,17 @@ app.post("/api/notifications/send-push", async (req, res) => {
         if (emailTemplateId && channels.email) {
             const template = await getEmailTemplateById(emailTemplateId);
             if (template) {
-                subject = substituteTemplateVars(template.subject, { title, message: body, action_url: actionUrl });
-                const substitutedBody = substituteTemplateVars(template.body, { title, message: body, action_url: actionUrl });
+                // Make the trigger's domain variables (e.g. order_number,
+                // hearing_date) available alongside title / message /
+                // action_url so admin templates can render rich data cards.
+                const enrichedVars: Record<string, string | undefined> = {
+                    ...((variables && typeof variables === "object") ? variables as Record<string, string | undefined> : {}),
+                    title,
+                    message: body,
+                    action_url: actionUrl,
+                };
+                subject = substituteTemplateVarsGeneric(template.subject, enrichedVars);
+                const substitutedBody = substituteTemplateVarsGeneric(template.body, enrichedVars);
                 htmlBodyOpt = { htmlBody: substitutedBody };
                 console.log("[Notifications] Using email template; subject length=" + subject.length + " body length=" + substitutedBody.length);
             } else {
@@ -1159,8 +1168,18 @@ app.post("/api/notifications/send-external-email", async (req, res) => {
                 if (rule.email_template_id) {
                     const template = await getEmailTemplateById(rule.email_template_id);
                     if (template) {
-                        subject = substituteTemplateVarsGeneric(template.subject, vars);
-                        const body = substituteTemplateVarsGeneric(template.body, vars);
+                        // Make the rule-resolved subject/message/action_url available
+                        // to the HTML template alongside the caller's own variables,
+                        // so templates can reference both {{title}}/{{message}} and
+                        // domain-specific fields like {{order_number}} directly.
+                        const enrichedVars: Record<string, string | undefined> = {
+                            ...vars,
+                            title: subject,
+                            message,
+                            action_url: actionUrl ?? "",
+                        };
+                        subject = substituteTemplateVarsGeneric(template.subject, enrichedVars);
+                        const body = substituteTemplateVarsGeneric(template.body, enrichedVars);
                         const result = await sendEmailsToAddresses(toSend, subject, message, actionUrl, { htmlBody: body });
                         return res.json({
                             success: true,
@@ -1456,114 +1475,104 @@ app.get("/api/incomes/:id", async (req, res) => {
 // income — without the details row the bank account balance is NOT updated.
 app.post("/api/incomes", async (req, res) => {
     try {
-        const { 
-            income_date, 
-            income_name, 
-            amount, 
-            bank_account_id, 
-            payment_mode, 
-            reference_number, 
-            client_id, 
-            employee_id, 
+        const {
+            income_date,
+            income_name,
+            amount,
+            bank_account_id,
+            payment_mode,
+            reference_number,
+            client_id,
+            employee_id,
             remarks,
             cheque_number,
             cheque_date,
             cheque_bank_name
         } = req.body;
 
-        if (!income_date || !income_name || !amount || !bank_account_id || !payment_mode) {
+        if (!income_date || !income_name || !amount || !payment_mode) {
             return res.status(400).json({ success: false, message: "Missing required fields" });
         }
 
-        // Derive party info from client/employee link for traceability in the registry
-        const partyId = client_id || employee_id || null;
-        const partyType = client_id ? "client" : (employee_id ? "employee" : null);
+        // bank_account_id is required only when the Cash & Bank module is enabled.
+        // When disabled, the dialog never collects an account — we just store the
+        // income record and skip the registry/balance side-effects.
+        const cashBankEnabled = !!bank_account_id;
 
-        // Step 1: Create the payment transaction header (RECEIVED)
-        const { data: transaction, error: txError } = await supabaseService
-            .from("payment_transactions_registry")
-            .insert([{
-                transaction_date: income_date,
-                transaction_type: "INCOME",
-                direction: "RECEIVED",
-                total_amount: amount,
-                source_type: "income",
-                party_id: partyId,
-                party_type: partyType,
-                reference_number: reference_number || null,
-                remarks: remarks || `Income: ${income_name}`,
-                status: "completed"
-            }])
-            .select()
-            .single();
-
-        if (txError) throw txError;
-
-        // Step 2: Create payment_transaction_details row — this is what actually credits the
-        // bank account balance (calculate_account_balance joins on ptd.bank_account_id)
-        const { error: detailError } = await supabaseService
-            .from("payment_transaction_details")
-            .insert([{
-                payment_id: transaction.id,
-                bank_account_id,
-                payment_mode,
-                amount,
-                transaction_reference: reference_number || null,
-                remarks: remarks || `Income: ${income_name}`,
-                cheque_number: cheque_number || null,
-                cheque_date: cheque_date || null,
-                cheque_bank_name: cheque_bank_name || null
-            }]);
-
-        if (detailError) {
-            // Rollback: cancel the registry row so it does not appear in any ledger/balance view
-            await supabaseService
-                .from("payment_transactions_registry")
-                .update({ status: "cancelled", cancellation_reason: "Income detail creation failed" })
-                .eq('id', transaction.id);
-            throw detailError;
-        }
-
-        // Step 3: Create income record with transaction_id
+        // Step 1: Insert the income_records row first so we have an id to use as
+        // record_payment_v2's source_id. status starts as 'completed' to mirror the
+        // payment registry; if record_payment_v2 fails we cancel both rows.
         const { data: income, error: incomeError } = await supabaseService
             .from("income_records")
             .insert([{
                 income_date,
                 income_name,
                 amount,
-                bank_account_id,
+                bank_account_id: bank_account_id || null,
                 payment_mode,
                 reference_number: reference_number || null,
                 client_id: client_id || null,
                 employee_id: employee_id || null,
                 remarks: remarks || null,
-                transaction_id: transaction.id,
                 status: "completed",
                 cheque_number: cheque_number || null,
                 cheque_date: cheque_date || null,
-                cheque_bank_name: cheque_bank_name || null
+                cheque_bank_name: cheque_bank_name || null,
             }])
             .select()
             .single();
 
-        if (incomeError) {
-            // Rollback: cancel the transaction if income creation fails. The cascade-linked
-            // detail row stays but is filtered out because calculate_account_balance requires
-            // ptr.status = 'completed'.
-            await supabaseService
-                .from("payment_transactions_registry")
-                .update({ status: "cancelled", cancellation_reason: "Income creation failed" })
-                .eq('id', transaction.id);
-            throw incomeError;
+        if (incomeError) throw incomeError;
+
+        if (!cashBankEnabled) {
+            // Cash & Bank module is OFF — skip the registry RPC entirely.
+            return res.json({ success: true, data: income });
         }
 
-        // Step 4: Backfill source_id on the registry row for traceability back to income_records
-        await supabaseService
-            .from("payment_transactions_registry")
-            .update({ source_id: income.id })
-            .eq('id', transaction.id);
+        // Step 2: Delegate registry+details creation to the shared payment RPC.
+        // Same path every other module uses (expense, PO, service order, etc.) —
+        // keeps balance accounting consistent and centralizes timezone handling.
+        const partyId = client_id || employee_id || null;
+        const partyType = client_id ? "client" : (employee_id ? "employee" : null);
 
-        res.json({ success: true, data: income });
+        const { data: rpcResult, error: rpcError } = await supabaseService.rpc("record_payment_v2", {
+            p_source_type: "INCOME",
+            p_source_id: income.id,
+            p_amount: amount,
+            p_payment_method: payment_mode,
+            p_bank_account_id: bank_account_id,
+            p_reference_number: reference_number || null,
+            p_notes: remarks || `Income: ${income_name}`,
+            p_metadata: {
+                party_id: partyId,
+                party_type: partyType,
+                cheque_number: cheque_number || null,
+                cheque_date: cheque_date || null,
+                cheque_bank_name: cheque_bank_name || null,
+            },
+            p_payment_date: income_date,
+        });
+
+        if (rpcError || !rpcResult?.success) {
+            // Roll back the income row so we don't leave an orphan
+            await supabaseService
+                .from("income_records")
+                .update({
+                    status: "cancelled",
+                    cancellation_reason: rpcResult?.error || rpcError?.message || "Payment RPC failed",
+                    cancelled_at: new Date().toISOString(),
+                })
+                .eq("id", income.id);
+            throw new Error(rpcResult?.error || rpcError?.message || "Failed to record payment");
+        }
+
+        // Step 3: Link the income row back to the registry entry for cancel/reporting
+        await supabaseService
+            .from("income_records")
+            .update({ transaction_id: rpcResult.registry_id })
+            .eq("id", income.id);
+
+        res.json({ success: true, data: { ...income, transaction_id: rpcResult.registry_id } });
     } catch (error: any) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -1609,7 +1618,7 @@ app.put("/api/incomes/:id", async (req, res) => {
                 income_date: income_date,
                 income_name: income_name,
                 amount: amount,
-                bank_account_id: bank_account_id,
+                bank_account_id: bank_account_id || null,
                 payment_mode: payment_mode,
                 reference_number: reference_number || null,
                 client_id: client_id || null,
@@ -1626,8 +1635,10 @@ app.put("/api/incomes/:id", async (req, res) => {
 
         if (incomeError) throw incomeError;
 
-        // Update linked transaction + detail row to keep balances in sync
-        if (existing.transaction_id) {
+        // Update linked transaction + detail row to keep balances in sync.
+        // Only when there's a registry entry AND a bank_account_id; with Cash & Bank
+        // OFF the income lives only in income_records.
+        if (existing.transaction_id && bank_account_id) {
             const partyId = client_id || employee_id || null;
             const partyType = client_id ? "client" : (employee_id ? "employee" : null);
 
@@ -1700,7 +1711,7 @@ app.put("/api/incomes/:id", async (req, res) => {
 app.patch("/api/incomes/:id/cancel", async (req, res) => {
     try {
         const { id } = req.params;
-        const { reason } = req.body;
+        const { reason, cancelled_by } = req.body;
 
         if (!reason) {
             return res.status(400).json({ success: false, message: "Cancellation reason is required" });
@@ -1709,42 +1720,44 @@ app.patch("/api/incomes/:id/cancel", async (req, res) => {
         // Get existing record to find the linked transaction
         const { data: existing, error: fetchError } = await supabaseService
             .from("income_records")
-            .select("transaction_id")
-            .eq('id', id)
+            .select("transaction_id, status")
+            .eq("id", id)
             .single();
 
         if (fetchError) throw fetchError;
         if (!existing) {
             return res.status(404).json({ success: false, message: "Income record not found" });
         }
+        if (existing.status === "cancelled") {
+            return res.status(400).json({ success: false, message: "Income is already cancelled" });
+        }
 
-        // Cancel income record
+        // Delegate registry-side cancellation (balance reversal, audit, module hooks)
+        // to the shared cancel RPC. Same path every other module uses.
+        if (existing.transaction_id) {
+            const { data: rpcResult, error: rpcError } = await supabaseService.rpc("cancel_payment_v2", {
+                p_registry_id: existing.transaction_id,
+                p_reason: `Income cancelled: ${reason}`,
+                p_cancelled_by: cancelled_by || null,
+            });
+            if (rpcError) throw rpcError;
+            if (!rpcResult?.success) throw new Error(rpcResult?.error || "Payment cancel RPC failed");
+        }
+
+        // Mirror the cancellation on the income_records row
         const { data: income, error: incomeError } = await supabaseService
             .from("income_records")
             .update({
                 status: "cancelled",
                 cancelled_at: new Date().toISOString(),
                 cancellation_reason: reason,
-                updated_at: new Date().toISOString()
+                updated_at: new Date().toISOString(),
             })
-            .eq('id', id)
+            .eq("id", id)
             .select()
             .single();
 
         if (incomeError) throw incomeError;
-
-        // Cancel linked transaction to adjust balance
-        if (existing.transaction_id) {
-            await supabaseService
-                .from("payment_transactions_registry")
-                .update({
-                    status: "cancelled",
-                    cancelled_at: new Date().toISOString(),
-                    cancellation_reason: `Income cancelled: ${reason}`,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', existing.transaction_id);
-        }
 
         res.json({ success: true, data: income });
     } catch (error: any) {
@@ -1764,6 +1777,52 @@ app.get("/api/health", async (req, res) => {
             status: "error",
             error: error.message,
         });
+    }
+});
+
+// DELETE /api/incomes/:id — Permanently delete income + cancel the linked transaction.
+// Cancellation goes through cancel_payment_v2 (same path as the soft-cancel endpoint)
+// so the bank balance is properly reversed. We then hard-delete the income_records
+// row. The registry row stays as 'cancelled' for audit.
+app.delete("/api/incomes/:id", async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason, cancelled_by } = req.body || {};
+
+        const { data: existing, error: fetchError } = await supabaseService
+            .from("income_records")
+            .select("transaction_id, status")
+            .eq("id", id)
+            .single();
+
+        if (fetchError) throw fetchError;
+        if (!existing) {
+            return res.status(404).json({ success: false, message: "Income record not found" });
+        }
+
+        // Reverse balance via the shared cancel RPC, but only if the transaction
+        // is still active (skip if it was already cancelled previously).
+        if (existing.transaction_id && existing.status !== "cancelled") {
+            const { data: rpcResult, error: rpcError } = await supabaseService.rpc("cancel_payment_v2", {
+                p_registry_id: existing.transaction_id,
+                p_reason: `Income deleted: ${reason || "No reason provided"}`,
+                p_cancelled_by: cancelled_by || null,
+            });
+            if (rpcError) throw rpcError;
+            if (!rpcResult?.success) throw new Error(rpcResult?.error || "Payment cancel RPC failed");
+        }
+
+        // Hard-delete the income row. The registry row stays for audit trail.
+        const { error: deleteError } = await supabaseService
+            .from("income_records")
+            .delete()
+            .eq("id", id);
+
+        if (deleteError) throw deleteError;
+
+        res.json({ success: true });
+    } catch (error: any) {
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 
