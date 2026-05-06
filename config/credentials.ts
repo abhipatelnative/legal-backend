@@ -32,7 +32,7 @@
 // export const SUPABASE_ANON_KEY = 'eeyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzc0NTE2MzkzLCJleHAiOjE5MzIxOTYzOTN9.4v5YG5U726UJITG5cL-KgOlCmU9LNEuLdWibyHmPqco';
 // export const SUPABASE_SERVICE_ROLE_KEY = 'eeyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NzQ1MTYzOTMsImV4cCI6MTkzMjE5NjM5M30.ri4CW6nKmFWTpa0DW648pd0YTSQoqDhomAzm77Cxa5I';
 
-export const SUPABASE_URL = 'https://studio.legalprime.nsserver.in/';
+export const SUPABASE_URL = 'https://studio.legalprime.nsserver.in';
 export const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzczNzM5MjUxLCJleHAiOjE5MzE0MTkyNTF9.mJIE5RgMKc8Pdim6GSKy3_sSG14gxise3ZYWCtF4D0U';
 export const SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NzM3MzkyNTEsImV4cCI6MTkzMTQxOTI1MX0.hqmuVSlP8jvtKCSc851Toe1H6r4_AEL8h51Xi7PW0Tw';
 

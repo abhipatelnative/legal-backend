@@ -29,6 +29,8 @@ import { getReportDefinitions, getReportDateRangePresets } from "./report-notifi
 import { SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY } from './config/credentials';
 import { twoFactorRouter } from "./two-factor-router";
 import { aiRouter } from "./ai/router";
+import { courtImportRouter } from "./court-import-router";
+import { startCourtSyncScheduler } from "./services/court-api/scheduler";
 
 dotenv.config();
 dayjs.extend(customParseFormat);
@@ -55,6 +57,9 @@ app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(twoFactorRouter);
 app.use(aiRouter);
+app.use(courtImportRouter);
+
+startCourtSyncScheduler();
 
 function sanitizePdfFileName(fileName?: string) {
     const baseName = (fileName || "document.pdf").replace(/[^\w.\-() ]+/g, "_");
